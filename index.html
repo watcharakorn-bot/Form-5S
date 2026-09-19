@@ -97,6 +97,77 @@
         .signature-row { height: 95px; }
 
         /* CSS สำหรับกราฟวงกลม (Pie Chart) */
+        /* ซ่อนไอคอนนาฬิกา/ลูกศรของช่องเวลา (เวลาที่พบ) */
+        input[type="time"]::-webkit-calendar-picker-indicator {
+            display: none;
+            -webkit-appearance: none;
+        }
+        input[type="time"] {
+            -moz-appearance: textfield;
+        }
+
+        /* กลุ่ม dropdown วัน/เดือน/ปี (พ.ศ.) สำหรับช่องวันที่ */
+        .date-select-group {
+            display: flex;
+            align-items: center;
+            width: 100%;
+            height: 100%;
+        }
+        .date-select {
+            border: none !important;
+            background-color: transparent !important;
+            color: #0d6efd !important;
+            font-weight: 500;
+            font-size: 0.78rem !important;
+            text-align: center;
+            padding: 1px 0 !important;
+            cursor: pointer;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+        }
+        .date-select-group .date-select:nth-child(1) { width: 26% !important; }
+        .date-select-group .date-select:nth-child(2) { width: 42% !important; }
+        .date-select-group .date-select:nth-child(3) { width: 32% !important; }
+
+        .time-select-group {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100%;
+        }
+        .time-select-group .time-select-hour,
+        .time-select-group .time-select-minute {
+            flex: 0 0 auto;
+            width: 2.3em;
+            text-align: center;
+        }
+        .time-select-group .time-colon {
+            flex: 0 0 auto;
+            padding: 0 1px;
+            font-weight: 600;
+            color: #0d6efd;
+        }
+
+        .date-select:disabled {
+            opacity: 1;
+            color: #0d6efd !important;
+            -webkit-text-fill-color: #0d6efd;
+            cursor: default;
+        }
+
+        .percent-select {
+            border: none !important;
+            background-color: transparent !important;
+            cursor: pointer;
+            text-align: center;
+            text-align-last: center;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+        }
+
         .pie-chart {
             width: 45px;
             height: 45px;
@@ -132,8 +203,8 @@
         }
         .capture-mode .excel-table { margin-bottom: 5px !important; }
         .capture-mode .excel-table th,
-        .capture-mode .excel-table td { padding: 3px 5px !important; line-height: 1.3 !important; }
-        .capture-mode .input-excel { line-height: 1.3 !important; }
+        .capture-mode .excel-table td { padding: 6px 5px 3px 5px !important; line-height: 1.6 !important; font-size: 0.78rem !important; }
+        .capture-mode .input-excel { line-height: 1.6 !important; font-size: 0.78rem !important; }
         .capture-mode .image-upload-box { height: 160px !important; }
         .capture-mode .solution-textarea { height: 120px !important; }
         .capture-mode .history-textarea { height: 95px !important; }
@@ -160,8 +231,8 @@
             .solution-textarea { height: 120px !important; }
             .history-textarea { height: 95px !important; }
             .signature-row { height: 85px !important; }
-            .excel-table th, .excel-table td { padding: 3px 5px !important; line-height: 1.3 !important; font-size: 0.84rem !important; }
-            .input-excel { line-height: 1.3 !important; font-size: 0.84rem !important; }
+            .excel-table th, .excel-table td { padding: 6px 5px 3px 5px !important; line-height: 1.6 !important; font-size: 0.78rem !important; }
+            .input-excel { line-height: 1.6 !important; font-size: 0.78rem !important; }
             
             .image-placeholder-text { display: none !important; }
             .border-bottom { border-color: transparent !important; }
@@ -175,6 +246,15 @@
     <button class="btn btn-success shadow-sm me-2" id="btn-save-img" onclick="saveAsImage()">🖼️ โหลดเป็นรูป</button>
     <button class="btn btn-primary shadow-sm" onclick="window.print()">🖨️ PDF/พิมพ์</button>
 </div>
+
+<!-- ฟอร์มซ่อนสำหรับอัปโหลดรูปขึ้น Google Drive ผ่าน Apps Script (ใช้ iframe เลี่ยงปัญหา CORS ของ fetch) -->
+<iframe name="drive-upload-frame" style="display:none;"></iframe>
+<form id="drive-upload-form" target="drive-upload-frame" method="POST"
+      action="https://script.google.com/macros/s/AKfycbyY7dic-mSlueHz4Th__q23g_7i6ebX2QXLyiENk0ErjuJu82InAq6w78l4ryMDsKgA/exec"
+      style="display:none;">
+    <input type="hidden" name="imageData" id="drive-upload-imageData">
+    <input type="hidden" name="filename" id="drive-upload-filename">
+</form>
 
 <form id="reportForm" onsubmit="return false;">
     <div class="form-container" id="form-content">
@@ -210,7 +290,7 @@
                         </div>
                         <!-- ช่อง Select: ผลัด -->
                         <div class="d-flex align-items-center" style="width: 25%; padding: 5px 6px; border-right: 1px solid #000;">
-                            <select class="input-excel text-center w-100" style="cursor: pointer;">
+                            <select id="shift-select" class="input-excel text-center w-100" style="cursor: pointer;">
                                 <option value="A">A</option>
                                 <option value="B">B</option>
                                 <option value="C">C</option>
@@ -230,12 +310,20 @@
             </tr>
             <tr>
                 <th class="text-end bg-light-gray fw-bold">วันที่พบ :</th>
-                <td>
-                    <input type="text" id="date-found" class="input-excel" value="17/7/2569" oninput="calculateDays()">
+                <td class="p-0">
+                    <div class="date-select-group">
+                        <select id="date-found-day" class="input-excel date-select" onchange="calculateDays()"></select>
+                        <select id="date-found-month" class="input-excel date-select" onchange="calculateDays()"></select>
+                        <select id="date-found-year" class="input-excel date-select" onchange="calculateDays()"></select>
+                    </div>
                 </td>
                 <th class="text-end bg-light-gray fw-bold">เวลาที่พบ :</th>
-                <td>
-                    <input type="time" class="input-excel" value="18:00" lang="th-TH-u-hc-h23" step="60">
+                <td class="p-0">
+                    <div class="time-select-group">
+                        <select id="time-found-hour" class="input-excel date-select time-select-hour"></select>
+                        <span class="time-colon">:</span>
+                        <select id="time-found-minute" class="input-excel date-select time-select-minute"></select>
+                    </div>
                 </td>
                 <th class="text-end bg-light-gray fw-bold">สถานที่พบ :</th>
                 <td>
@@ -327,19 +415,19 @@
                     <textarea class="input-excel w-100 p-1 solution-textarea">1....</textarea>
                 </td>
                 <td class="p-0 align-top">
-                    <input type="text" id="master-date" class="input-excel text-center py-1" value="10/7/2569" oninput="syncAndCalculate()">
+                    <div class="date-select-group">
+                        <select id="master-date-day" class="input-excel date-select" onchange="syncAndCalculate()"></select>
+                        <select id="master-date-month" class="input-excel date-select" onchange="syncAndCalculate()"></select>
+                        <select id="master-date-year" class="input-excel date-select" onchange="syncAndCalculate()"></select>
+                    </div>
                     <input type="text" class="input-excel text-center py-1">
                     <input type="text" class="input-excel text-center py-1">
                     <input type="text" class="input-excel text-center py-1">
                     <input type="text" class="input-excel text-center py-1">
                 </td>
                 <td class="p-0 align-top">
-                    <!-- เพิ่ม ID master-percent และ oninput เพื่อส่งค่าไปที่กราฟ -->
-                    <input type="text" id="master-percent" class="input-excel text-center py-1" value="100%" oninput="syncPercentages('master-percent')">
-                    <input type="text" class="input-excel text-center py-1">
-                    <input type="text" class="input-excel text-center py-1">
-                    <input type="text" class="input-excel text-center py-1">
-                    <input type="text" class="input-excel text-center py-1">
+                    <!-- เพิ่ม ID master-percent และ onchange เพื่อส่งค่าไปที่กราฟ -->
+                    <select id="master-percent" class="input-excel percent-select text-center py-1" onchange="syncPercentages('master-percent')"></select>
                 </td>
             </tr>
         </table>
@@ -361,19 +449,23 @@
                         <!-- เปลี่ยนจาก div เป็น canvas เพื่อให้แคปรูปติดชัวร์ 100% -->
                         <canvas class="pie-chart mb-1" id="chart-area" width="90" height="90"></canvas>
                         <!-- ยกเลิกการลิงก์ช่องนี้ ให้ทำงานเป็นอิสระ -->
-                        <input type="text" id="input-area" class="input-excel text-center fs-5" value="2%" oninput="updatePieChart('input-area', 'chart-area')">
+                        <select id="input-area" class="input-excel percent-select text-center fs-5" onchange="updatePieChart('input-area', 'chart-area')"></select>
                     </div>
                 </td>
                 <th class="text-center bg-light-gray fw-bold">กำหนดเสร็จ</th>
-                <td>
-                    <input type="text" id="date-finish" class="input-excel text-center" readonly tabindex="-1">
+                <td class="p-0 align-middle">
+                    <div class="date-select-group">
+                        <select id="date-finish-day" class="input-excel date-select" disabled tabindex="-1"></select>
+                        <select id="date-finish-month" class="input-excel date-select" disabled tabindex="-1"></select>
+                        <select id="date-finish-year" class="input-excel date-select" disabled tabindex="-1"></select>
+                    </div>
                 </td>
                 <th rowspan="2" class="text-center bg-light-gray fw-bold">สถานะความสำเร็จ :</th>
                 <td rowspan="2" class="text-center align-middle">
                     <div class="d-flex flex-column align-items-center justify-content-center h-100">
                         <!-- เปลี่ยนจาก div เป็น canvas -->
                         <canvas class="pie-chart mb-1" id="chart-overall" width="90" height="90"></canvas>
-                        <input type="text" id="input-overall" class="input-excel text-center fs-5" value="100%" oninput="syncPercentages('input-overall')">
+                        <select id="input-overall" class="input-excel percent-select text-center fs-5" onchange="syncPercentages('input-overall')"></select>
                     </div>
                 </td>
             </tr>
@@ -427,6 +519,228 @@
 
 <!-- Scripts -->
 <script>
+    // ===============================================
+    // ฟังก์ชันช่วยเหลือ: ช่องวันที่แบบ dropdown วัน/เดือน/ปี (พ.ศ.)
+    // ===============================================
+    const thaiMonthsAbbr = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+
+    function getTodayThai() {
+        const now = new Date();
+        return { day: now.getDate(), month: now.getMonth() + 1, yearBE: now.getFullYear() + 543 };
+    }
+
+    // ===============================================
+    // ฟังก์ชันช่วยเหลือ: ช่องเวลาแบบ dropdown ชั่วโมง/นาที (24 ชม. สเกล 5 นาที)
+    // ===============================================
+    function getCurrentTimeRounded5() {
+        const now = new Date();
+        let h = now.getHours();
+        let m = Math.round(now.getMinutes() / 5) * 5;
+        if (m === 60) { m = 0; h = (h + 1) % 24; }
+        return { hour: h, minute: m };
+    }
+
+    function populateTimeSelect(prefix, defaultHour, defaultMinute) {
+        const hourSel = document.getElementById(prefix + '-hour');
+        const minuteSel = document.getElementById(prefix + '-minute');
+        if (!hourSel || !minuteSel) return;
+
+        hourSel.innerHTML = '';
+        for (let h = 0; h <= 23; h++) {
+            const opt = document.createElement('option');
+            const v = String(h).padStart(2, '0');
+            opt.value = v;
+            opt.textContent = v;
+            hourSel.appendChild(opt);
+        }
+
+        minuteSel.innerHTML = '';
+        for (let m = 0; m <= 55; m += 5) {
+            const opt = document.createElement('option');
+            const v = String(m).padStart(2, '0');
+            opt.value = v;
+            opt.textContent = v;
+            minuteSel.appendChild(opt);
+        }
+
+        hourSel.value = String(defaultHour).padStart(2, '0');
+        minuteSel.value = String(defaultMinute).padStart(2, '0');
+    }
+
+    function getTimeString(prefix) {
+        const hourSel = document.getElementById(prefix + '-hour');
+        const minuteSel = document.getElementById(prefix + '-minute');
+        if (!hourSel || !minuteSel || !hourSel.value || !minuteSel.value) return '';
+        return hourSel.value + ':' + minuteSel.value;
+    }
+
+    // ===============================================
+    // ฟังก์ชันช่วยเหลือ: อัปโหลดรูปขึ้น Google Drive ผ่าน Apps Script
+    // ===============================================
+    function buildDriveFilename() {
+        const shiftSel = document.getElementById('shift-select');
+        const shift = (shiftSel && shiftSel.value) ? shiftSel.value : 'X';
+
+        const d = document.getElementById('master-date-day');
+        const m = document.getElementById('master-date-month');
+        const y = document.getElementById('master-date-year');
+        const pad2 = n => String(n).padStart(2, '0');
+        let dateStr = 'ไม่ระบุวันที่';
+        if (d && m && y && d.value && m.value && y.value) {
+            dateStr = pad2(d.value) + '-' + pad2(m.value) + '-' + y.value;
+        }
+        return 'ผลัด_' + shift + '_วันที่ทำ_' + dateStr + '.png';
+    }
+
+    function uploadToDrive(dataURL) {
+        try {
+            document.getElementById('drive-upload-imageData').value = dataURL;
+            document.getElementById('drive-upload-filename').value = buildDriveFilename();
+            document.getElementById('drive-upload-form').submit();
+        } catch (err) {
+            console.error('อัปโหลดขึ้น Google Drive ไม่สำเร็จ:', err);
+        }
+    }
+
+    function populateDateSelect(prefix, defaultDay, defaultMonth, defaultYearBE) {
+        const daySel = document.getElementById(prefix + '-day');
+        const monthSel = document.getElementById(prefix + '-month');
+        const yearSel = document.getElementById(prefix + '-year');
+        if (!daySel || !monthSel || !yearSel) return;
+
+        daySel.innerHTML = '';
+        for (let d = 1; d <= 31; d++) {
+            const opt = document.createElement('option');
+            opt.value = d;
+            opt.textContent = d;
+            daySel.appendChild(opt);
+        }
+
+        monthSel.innerHTML = '';
+        thaiMonthsAbbr.forEach((m, i) => {
+            const opt = document.createElement('option');
+            opt.value = i + 1;
+            opt.textContent = m;
+            monthSel.appendChild(opt);
+        });
+
+        const centerYear = defaultYearBE || (new Date().getFullYear() + 543);
+        yearSel.innerHTML = '';
+        for (let y = centerYear - 5; y <= centerYear + 5; y++) {
+            const opt = document.createElement('option');
+            opt.value = y;
+            opt.textContent = y;
+            yearSel.appendChild(opt);
+        }
+
+        daySel.value = defaultDay;
+        monthSel.value = defaultMonth;
+        yearSel.value = defaultYearBE || centerYear;
+    }
+
+    function getThaiDateString(prefix) {
+        const daySel = document.getElementById(prefix + '-day');
+        const monthSel = document.getElementById(prefix + '-month');
+        const yearSel = document.getElementById(prefix + '-year');
+        if (!daySel || !monthSel || !yearSel || !daySel.value || !monthSel.value || !yearSel.value) return '';
+        return daySel.value + '/' + monthSel.value + '/' + yearSel.value;
+    }
+
+    // ===============================================
+    // ฟังก์ชันช่วยเหลือ: ช่อง % แบบ dropdown ทีละ 5% (0,5,10...100)
+    // ===============================================
+    function populatePercentSelect(id, defaultValue) {
+        const sel = document.getElementById(id);
+        if (!sel) return;
+        sel.innerHTML = '';
+        for (let p = 0; p <= 100; p += 5) {
+            const opt = document.createElement('option');
+            opt.value = p + '%';
+            opt.textContent = p + '%';
+            sel.appendChild(opt);
+        }
+        if (defaultValue !== undefined) sel.value = defaultValue;
+    }
+
+    // ===============================================
+    // ฟังก์ชันช่วยเหลือ: ซ่อนลูกศร/แสดงเป็นข้อความล้วนตอนแคปรูป (select ทุกช่อง)
+    // ===============================================
+    function replaceSelectsWithDivs(container) {
+        const selects = container.querySelectorAll('select');
+        const replacements = [];
+        selects.forEach(sel => {
+            const div = document.createElement('div');
+            div.className = sel.className;
+
+            const style = window.getComputedStyle(sel);
+            div.style.fontFamily = style.fontFamily;
+            div.style.fontSize = style.fontSize;
+            div.style.fontWeight = style.fontWeight;
+            div.style.color = style.color;
+            div.style.width = style.width;
+            div.style.height = style.height;
+            div.style.padding = style.padding;
+            div.style.display = 'flex';
+            div.style.alignItems = 'center';
+            div.style.justifyContent = (style.textAlign === 'center') ? 'center' : 'flex-start';
+            div.style.whiteSpace = 'nowrap';
+            div.style.overflow = 'hidden';
+
+            const selectedOption = sel.options[sel.selectedIndex];
+            div.textContent = selectedOption ? selectedOption.textContent : '';
+
+            sel.parentNode.insertBefore(div, sel);
+            sel.style.display = 'none';
+            replacements.push({ select: sel, div: div });
+        });
+        return replacements;
+    }
+
+    function restoreSelects(replacements) {
+        replacements.forEach(rep => {
+            rep.select.style.display = '';
+            rep.div.remove();
+        });
+    }
+
+    // ===============================================
+    // ฟังก์ชันช่วยเหลือ: ช่องเวลา (input type=time) → ข้อความล้วน ไม่มีไอคอนนาฬิกา/ลูกศร
+    // ===============================================
+    function replaceTimeInputsWithDivs(container) {
+        const times = container.querySelectorAll('input[type="time"]');
+        const replacements = [];
+        times.forEach(inp => {
+            const div = document.createElement('div');
+            div.className = inp.className;
+
+            const style = window.getComputedStyle(inp);
+            div.style.fontFamily = style.fontFamily;
+            div.style.fontSize = style.fontSize;
+            div.style.fontWeight = style.fontWeight;
+            div.style.color = style.color;
+            div.style.width = style.width;
+            div.style.height = style.height;
+            div.style.padding = style.padding;
+            div.style.display = 'flex';
+            div.style.alignItems = 'center';
+            div.style.justifyContent = 'center';
+
+            div.textContent = inp.value || '';
+
+            inp.parentNode.insertBefore(div, inp);
+            inp.style.display = 'none';
+            replacements.push({ input: inp, div: div });
+        });
+        return replacements;
+    }
+
+    function restoreTimeInputs(replacements) {
+        replacements.forEach(rep => {
+            rep.input.style.display = '';
+            rep.div.remove();
+        });
+    }
+
     // ===============================================
     // ฟังก์ชันช่วยเหลือ: แก้ปัญหาแคปรูปแล้วข้อความใน Textarea ไม่ขึ้นบรรทัดใหม่
     // ===============================================
@@ -491,31 +805,45 @@
         // รีเซ็ตการเลื่อนหน้าจอเพื่อป้องกันภาพขาด
         window.scrollTo(0, 0);
 
-        // แปลง Textarea เป็น Div เพื่อให้เวลาบันทึกรูปข้อความขึ้นบรรทัดใหม่และแสดงผลครบถ้วน
-        const replacements = replaceTextareasWithDivs(formElement);
+        // แปลง Textarea และ Select เป็น Div ชั่วคราว เพื่อให้ข้อความขึ้นบรรทัดใหม่ครบถ้วน
+        // และไม่มีลูกศร dropdown ติดไปในรูปที่บันทึก
+        const taReplacements = replaceTextareasWithDivs(formElement);
+        const selReplacements = replaceSelectsWithDivs(formElement);
+        const timeReplacements = replaceTimeInputsWithDivs(formElement);
 
-        // ทำการสร้างภาพโดยใช้ scale 3
-        html2canvas(formElement, { 
-            scale: 3, 
-            useCORS: true,
-            backgroundColor: "#ffffff"
-        }).then(canvas => {
-            restoreTextareas(replacements); // คืนค่า Textarea กลับมาทันที
+        let captureDone = false;
+
+        function finishCapture(canvas) {
+            if (captureDone) return;
+            captureDone = true;
+            restoreTextareas(taReplacements);
+            restoreSelects(selReplacements);
+            restoreTimeInputs(timeReplacements);
 
             const link = document.createElement('a');
             const dateStr = new Date().toISOString().slice(0,10); // ตั้งชื่อไฟล์ตามวันที่ปัจจุบัน
             link.download = 'รายงานปัญหา_' + dateStr + '.png';
-            link.href = canvas.toDataURL('image/png');
+            const pngData = canvas.toDataURL('image/png');
+            link.href = pngData;
             link.click();
-            
+
+            // อัปโหลดรูปเดียวกันขึ้น Google Drive ด้วย
+            uploadToDrive(pngData);
+
             // คืนค่ารูปแบบเดิม
             formElement.style.boxShadow = originalBoxShadow;
             formElement.classList.remove('capture-mode');
             placeholders.forEach(el => el.style.display = '');
             btn.innerHTML = originalText;
             btn.disabled = false;
-        }).catch(err => {
-            restoreTextareas(replacements); // คืนค่า Textarea กลับมา กรณีเกิดข้อผิดพลาด
+        }
+
+        function failCapture(err) {
+            if (captureDone) return;
+            captureDone = true;
+            restoreTextareas(taReplacements);
+            restoreSelects(selReplacements);
+            restoreTimeInputs(timeReplacements);
             console.error(err);
             alert('เกิดข้อผิดพลาดในการบันทึกรูปภาพ');
             formElement.style.boxShadow = originalBoxShadow;
@@ -523,7 +851,31 @@
             placeholders.forEach(el => el.style.display = '');
             btn.innerHTML = originalText;
             btn.disabled = false;
+        }
+
+        // รอให้ฟอนต์ Sarabun โหลดเสร็จสมบูรณ์ก่อนแคป เพื่อไม่ให้สระ/วรรณยุกต์ขาด
+        // (ตัดโหมด foreignObjectRendering ออก เพราะทำให้ค้างเมื่อฟอร์มมีรูปภาพ/องค์ประกอบเยอะ
+        //  ใช้การเพิ่ม line-height/padding/ลดขนาดตัวอักษรแทนเพื่อแก้ปัญหาตัวอักษรขาด)
+        document.fonts.ready.then(() => {
+            html2canvas(formElement, {
+                scale: 3,
+                useCORS: true,
+                backgroundColor: "#ffffff"
+            }).then(finishCapture).catch(failCapture);
+        }).catch(() => {
+            html2canvas(formElement, {
+                scale: 3,
+                useCORS: true,
+                backgroundColor: "#ffffff"
+            }).then(finishCapture).catch(failCapture);
         });
+
+        // กันปุ่มค้างถาวร: ถ้าเกิน 25 วินาทีแล้วยังไม่เสร็จ ให้ถือว่าล้มเหลวและคืนปุ่มกลับมาใช้งานได้
+        setTimeout(() => {
+            if (!captureDone) {
+                failCapture(new Error('หมดเวลาในการบันทึกรูปภาพ (เกิน 25 วินาที)'));
+            }
+        }, 25000);
     }
 
     // สคริปต์ 1: แสดงรูปภาพเมื่ออัปโหลด
@@ -561,7 +913,21 @@
             setupImagePreview('img-before', 'label-img-before');
             setupImagePreview('img-after', 'label-img-after');
 
-            // 3. สั่งคำนวณวันและอัปเดตกราฟ
+            // 3. รีเซ็ตช่องวันที่ dropdown กลับเป็นวันที่ปัจจุบัน
+            {
+                const today = getTodayThai();
+                populateDateSelect('date-found', today.day, today.month, today.yearBE);
+                populateDateSelect('master-date', today.day, today.month, today.yearBE);
+                const nowTime = getCurrentTimeRounded5();
+                populateTimeSelect('time-found', nowTime.hour, nowTime.minute);
+            }
+
+            // 3.5 รีเซ็ตช่อง % dropdown กลับเป็นค่าเริ่มต้น
+            populatePercentSelect('master-percent', '100%');
+            populatePercentSelect('input-overall', '100%');
+            populatePercentSelect('input-area', '0%');
+
+            // 4. สั่งคำนวณวันและอัปเดตกราฟ
             syncAndCalculate();
             updatePieChart('input-area', 'chart-area');
             updatePieChart('input-overall', 'chart-overall');
@@ -582,8 +948,8 @@
     }
 
     function calculateDays() {
-        const foundDateStr = document.getElementById('date-found').value;
-        const finishDateStr = document.getElementById('date-finish').value;
+        const foundDateStr = getThaiDateString('date-found');
+        const finishDateStr = getThaiDateString('date-finish');
         const resultInput = document.getElementById('days-remaining');
 
         if (parseThaiDate(foundDateStr) && parseThaiDate(finishDateStr)) {
@@ -596,7 +962,11 @@
     }
 
     function syncAndCalculate() {
-        document.getElementById('date-finish').value = document.getElementById('master-date').value;
+        const day = document.getElementById('master-date-day').value;
+        const month = document.getElementById('master-date-month').value;
+        const year = document.getElementById('master-date-year').value;
+        // ทำให้ "กำหนดเสร็จ" ด้านล่างเป็น dropdown แบบเดียวกับด้านบน และค่าตรงกันเสมอ
+        populateDateSelect('date-finish', day, month, year);
         calculateDays();
     }
 
@@ -661,8 +1031,46 @@
         }
     }
 
+    // ก่อนพิมพ์/บันทึก PDF: สลับ select, textarea, ช่องเวลา เป็นข้อความล้วนเหมือนตอนโหลดเป็นรูป
+    // เพื่อไม่ให้ลูกศร dropdown / ไอคอนนาฬิกา ติดไปในกระดาษ/PDF
+    // และแคปรูปเดียวกันอัปโหลดขึ้น Google Drive คู่กันไปด้วย (ไม่บล็อกการพิมพ์)
+    let printReplacements = null;
+    window.addEventListener('beforeprint', function () {
+        const formElement = document.getElementById('form-content');
+        formElement.classList.add('capture-mode');
+        printReplacements = {
+            ta: replaceTextareasWithDivs(formElement),
+            sel: replaceSelectsWithDivs(formElement),
+            time: replaceTimeInputsWithDivs(formElement)
+        };
+
+        document.fonts.ready.then(() => {
+            html2canvas(formElement, { scale: 3, useCORS: true, backgroundColor: "#ffffff" })
+                .then(canvas => uploadToDrive(canvas.toDataURL('image/png')))
+                .catch(err => console.error('แคปรูปสำหรับอัป Drive ไม่สำเร็จ:', err));
+        }).catch(() => {});
+    });
+    window.addEventListener('afterprint', function () {
+        const formElement = document.getElementById('form-content');
+        formElement.classList.remove('capture-mode');
+        if (printReplacements) {
+            restoreTextareas(printReplacements.ta);
+            restoreSelects(printReplacements.sel);
+            restoreTimeInputs(printReplacements.time);
+            printReplacements = null;
+        }
+    });
+
     window.onload = function() {
-        syncAndCalculate(); 
+        const today = getTodayThai();
+        populateDateSelect('date-found', today.day, today.month, today.yearBE);
+        populateDateSelect('master-date', today.day, today.month, today.yearBE);
+        const nowTime = getCurrentTimeRounded5();
+        populateTimeSelect('time-found', nowTime.hour, nowTime.minute);
+        populatePercentSelect('master-percent', '100%');
+        populatePercentSelect('input-overall', '100%');
+        populatePercentSelect('input-area', '0%');
+        syncAndCalculate();
         updatePieChart('input-area', 'chart-area');
         updatePieChart('input-overall', 'chart-overall');
     };
