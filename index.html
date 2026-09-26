@@ -279,7 +279,7 @@
                 <th class="fw-bold bg-light-gray text-center">1. รายการ/สภาพปัญหา</th>
                 <th class="text-end bg-light-gray fw-bold">สภาพปัญหา :</th>
                 <td colspan="2">
-                    <input type="text" class="input-excel" value=".....">
+                    <input type="text" class="input-excel" value="">
                 </td>
                 <!-- รวมคอลัมน์เดิมแล้วแบ่งช่องใหม่ด้วย Flexbox เพื่อเพิ่มช่อง 'ผลัด' -->
                 <td colspan="2" style="padding: 0 !important;">
@@ -327,7 +327,7 @@
                 </td>
                 <th class="text-end bg-light-gray fw-bold">สถานที่พบ :</th>
                 <td>
-                    <input type="text" class="input-excel" value=".....">
+                    <input type="text" class="input-excel" value="">
                 </td>
             </tr>
             <tr>
@@ -744,6 +744,16 @@
     // ===============================================
     // ฟังก์ชันช่วยเหลือ: แก้ปัญหาแคปรูปแล้วข้อความใน Textarea ไม่ขึ้นบรรทัดใหม่
     // ===============================================
+    // ===============================================
+    // ฟังก์ชันช่วยเหลือ: แทรก zero-width space ตรงรอยต่อไทย-อังกฤษ/ตัวเลข
+    // เพื่อให้เอนจิน html2canvas หาจุดตัดขึ้นบรรทัดใหม่เจอ (กันข้อความล้นขอบช่องตอนแคป)
+    // ===============================================
+    function addSoftBreaks(text) {
+        return text
+            .replace(/([\u0E00-\u0E7F])([A-Za-z0-9])/g, '$1\u200B$2')
+            .replace(/([A-Za-z0-9])([\u0E00-\u0E7F])/g, '$1\u200B$2');
+    }
+
     function replaceTextareasWithDivs(container) {
         const textareas = container.querySelectorAll('textarea');
         const replacements = [];
@@ -766,7 +776,9 @@
             div.style.overflow = 'hidden';
             
             // ใส่ข้อความลงไป (\n จะถูกปัดบรรทัดอัตโนมัติด้วย pre-wrap)
-            div.textContent = ta.value; 
+            // แทรกช่องว่างที่มองไม่เห็น (zero-width space) ตรงรอยต่อไทย-อังกฤษ/ตัวเลข
+            // เพื่อให้ html2canvas มีจุดตัดขึ้นบรรทัดใหม่ได้ (ไม่งั้นคำที่ติดกันจะไม่ขึ้นบรรทัดใหม่)
+            div.textContent = addSoftBreaks(ta.value);
             
             ta.parentNode.insertBefore(div, ta);
             ta.style.display = 'none';
