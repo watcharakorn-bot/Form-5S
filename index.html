@@ -279,7 +279,7 @@
                 <th class="fw-bold bg-light-gray text-center">1. รายการ/สภาพปัญหา</th>
                 <th class="text-end bg-light-gray fw-bold">สภาพปัญหา :</th>
                 <td colspan="2">
-                    <input type="text" class="input-excel" value="">
+                    <input type="text" class="input-excel">
                 </td>
                 <!-- รวมคอลัมน์เดิมแล้วแบ่งช่องใหม่ด้วย Flexbox เพื่อเพิ่มช่อง 'ผลัด' -->
                 <td colspan="2" style="padding: 0 !important;">
@@ -327,7 +327,7 @@
                 </td>
                 <th class="text-end bg-light-gray fw-bold">สถานที่พบ :</th>
                 <td>
-                    <input type="text" class="input-excel" value="">
+                    <input type="text" class="input-excel">
                 </td>
             </tr>
             <tr>
@@ -678,13 +678,16 @@
             div.style.fontWeight = style.fontWeight;
             div.style.color = style.color;
             div.style.width = style.width;
-            div.style.height = style.height;
+            // ไม่ล็อกความสูงตายตัว ให้สูงตามข้อความ (กันข้อความครึ่งล่างถูกตัดตอนแคป)
+            div.style.height = 'auto';
+            div.style.minHeight = style.height;
+            div.style.lineHeight = '1.6';
             div.style.padding = style.padding;
             div.style.display = 'flex';
             div.style.alignItems = 'center';
             div.style.justifyContent = (style.textAlign === 'center') ? 'center' : 'flex-start';
             div.style.whiteSpace = 'nowrap';
-            div.style.overflow = 'hidden';
+            div.style.overflow = 'visible';
 
             const selectedOption = sel.options[sel.selectedIndex];
             div.textContent = selectedOption ? selectedOption.textContent : '';
@@ -719,7 +722,9 @@
             div.style.fontWeight = style.fontWeight;
             div.style.color = style.color;
             div.style.width = style.width;
-            div.style.height = style.height;
+            div.style.height = 'auto';
+            div.style.minHeight = style.height;
+            div.style.lineHeight = '1.6';
             div.style.padding = style.padding;
             div.style.display = 'flex';
             div.style.alignItems = 'center';
