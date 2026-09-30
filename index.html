@@ -236,7 +236,13 @@
             
             .image-placeholder-text { display: none !important; }
             .border-bottom { border-color: transparent !important; }
+
+            /* พิมพ์/บันทึก PDF จากรูปที่แคป (ปุ่ม PDF/พิมพ์) → หน้าตาเหมือนรูปที่ขึ้น Drive */
+            body.print-from-image > *:not(#print-image-wrap) { display: none !important; }
+            body.print-from-image #print-image-wrap { display: block !important; }
+            #print-image { display: block; width: 100%; max-height: 190mm; object-fit: contain; margin: 0 auto; }
         }
+        #print-image-wrap { display: none; }
     </style>
 </head>
 <body>
@@ -244,7 +250,7 @@
 <div class="toolbar text-end no-print">
     <button class="btn btn-danger shadow-sm me-2" onclick="clearForm()">🗑️ ล้างข้อมูล</button>
     <button class="btn btn-success shadow-sm me-2" id="btn-save-img" onclick="saveAsImage()">🖼️ โหลดเป็นรูป</button>
-    <button class="btn btn-primary shadow-sm" onclick="window.print()">🖨️ PDF/พิมพ์</button>
+    <button class="btn btn-primary shadow-sm" id="btn-pdf" onclick="saveAsPdf()">🖨️ PDF/พิมพ์</button>
 </div>
 
 <!-- ฟอร์มซ่อนสำหรับอัปโหลดรูปขึ้น Google Drive ผ่าน Apps Script (ใช้ iframe เลี่ยงปัญหา CORS ของ fetch) -->
@@ -663,236 +669,187 @@
     }
 
     // ===============================================
-    // ฟังก์ชันช่วยเหลือ: ซ่อนลูกศร/แสดงเป็นข้อความล้วนตอนแคปรูป (select ทุกช่อง)
+    // ระบบแคปฟอร์มเป็นรูป — ใช้ร่วมกันทุกช่องทาง (โหลดเป็นรูป / PDF / Google Drive)
+    // ทุกช่องทางใช้รูปเดียวกันที่แคปจากฟังก์ชันนี้ ผลลัพธ์จึงเหมือนกันทุกแบบ
     // ===============================================
-    function replaceSelectsWithDivs(container) {
-        const selects = container.querySelectorAll('select');
-        const replacements = [];
-        selects.forEach(sel => {
-            const div = document.createElement('div');
-            div.className = sel.className;
+    const ZWSP = '\u200B';
+    const thaiWordSegmenter = (typeof Intl !== 'undefined' && Intl.Segmenter)
+        ? new Intl.Segmenter('th', { granularity: 'word' }) : null;
 
-            const style = window.getComputedStyle(sel);
-            div.style.fontFamily = style.fontFamily;
-            div.style.fontSize = style.fontSize;
-            div.style.fontWeight = style.fontWeight;
-            div.style.color = style.color;
-            div.style.width = style.width;
-            // ไม่ล็อกความสูงตายตัว ให้สูงตามข้อความ (กันข้อความครึ่งล่างถูกตัดตอนแคป)
-            div.style.height = 'auto';
-            div.style.minHeight = style.height;
-            div.style.lineHeight = '1.6';
-            div.style.padding = style.padding;
-            div.style.display = 'flex';
-            div.style.alignItems = 'center';
-            div.style.justifyContent = (style.textAlign === 'center') ? 'center' : 'flex-start';
-            div.style.whiteSpace = 'nowrap';
-            div.style.overflow = 'visible';
-
-            const selectedOption = sel.options[sel.selectedIndex];
-            div.textContent = selectedOption ? selectedOption.textContent : '';
-
-            sel.parentNode.insertBefore(div, sel);
-            sel.style.display = 'none';
-            replacements.push({ select: sel, div: div });
-        });
-        return replacements;
-    }
-
-    function restoreSelects(replacements) {
-        replacements.forEach(rep => {
-            rep.select.style.display = '';
-            rep.div.remove();
-        });
-    }
-
-    // ===============================================
-    // ฟังก์ชันช่วยเหลือ: ช่องเวลา (input type=time) → ข้อความล้วน ไม่มีไอคอนนาฬิกา/ลูกศร
-    // ===============================================
-    function replaceTimeInputsWithDivs(container) {
-        const times = container.querySelectorAll('input[type="time"]');
-        const replacements = [];
-        times.forEach(inp => {
-            const div = document.createElement('div');
-            div.className = inp.className;
-
-            const style = window.getComputedStyle(inp);
-            div.style.fontFamily = style.fontFamily;
-            div.style.fontSize = style.fontSize;
-            div.style.fontWeight = style.fontWeight;
-            div.style.color = style.color;
-            div.style.width = style.width;
-            div.style.height = 'auto';
-            div.style.minHeight = style.height;
-            div.style.lineHeight = '1.6';
-            div.style.padding = style.padding;
-            div.style.display = 'flex';
-            div.style.alignItems = 'center';
-            div.style.justifyContent = 'center';
-
-            div.textContent = inp.value || '';
-
-            inp.parentNode.insertBefore(div, inp);
-            inp.style.display = 'none';
-            replacements.push({ input: inp, div: div });
-        });
-        return replacements;
-    }
-
-    function restoreTimeInputs(replacements) {
-        replacements.forEach(rep => {
-            rep.input.style.display = '';
-            rep.div.remove();
-        });
-    }
-
-    // ===============================================
-    // ฟังก์ชันช่วยเหลือ: แก้ปัญหาแคปรูปแล้วข้อความใน Textarea ไม่ขึ้นบรรทัดใหม่
-    // ===============================================
-    // ===============================================
-    // ฟังก์ชันช่วยเหลือ: แทรก zero-width space ตรงรอยต่อไทย-อังกฤษ/ตัวเลข
-    // เพื่อให้เอนจิน html2canvas หาจุดตัดขึ้นบรรทัดใหม่เจอ (กันข้อความล้นขอบช่องตอนแคป)
-    // ===============================================
+    // แทรกจุดตัดคำที่มองไม่เห็นระหว่างคำไทย/อังกฤษ เพื่อให้ข้อความยาวขึ้นบรรทัดใหม่ได้ (ไม่แก้ข้อความจริงในฟอร์ม)
     function addSoftBreaks(text) {
+        if (!text) return '';
+        if (thaiWordSegmenter) {
+            let out = '';
+            for (const s of thaiWordSegmenter.segment(text)) out += s.segment + ZWSP;
+            return out;
+        }
+        // วิธีสำรอง: ตัดก่อนพยัญชนะหรือสระหน้า (เ แ โ ใ ไ) โดยไม่แยกสระ/วรรณยุกต์ออกจากพยัญชนะ
         return text
-            .replace(/([\u0E00-\u0E7F])([A-Za-z0-9])/g, '$1\u200B$2')
-            .replace(/([A-Za-z0-9])([\u0E00-\u0E7F])/g, '$1\u200B$2');
+            .replace(/([\u0E01-\u0E3F\u0E45-\u0E7F])(?=[\u0E01-\u0E2E\u0E40-\u0E44])/g, '$1' + ZWSP)
+            .replace(/([\u0E00-\u0E7F])(?=[A-Za-z0-9])/g, '$1' + ZWSP)
+            .replace(/([A-Za-z0-9.])(?=[\u0E00-\u0E7F])/g, '$1' + ZWSP);
     }
 
-    function replaceTextareasWithDivs(container) {
-        const textareas = container.querySelectorAll('textarea');
-        const replacements = [];
-        textareas.forEach(ta => {
+    // สลับช่องกรอกทุกชนิด (ข้อความ / dropdown / textarea) เป็นข้อความธรรมดาชั่วคราว
+    // - ไม่ล็อกความสูง ให้สูงตามข้อความ → สระล่าง ◌ุ ◌ู และหางตัวอักษรไม่ถูกตัด
+    // - ไม่มีลูกศร dropdown
+    // - ใส่ค่าแบบ !important เพื่อไม่ให้กฎ CSS เดิมทับ
+    function replaceFieldsWithStatic(root) {
+        const fields = root.querySelectorAll('input:not([type]), input[type="text"], input[type="number"], select, textarea');
+        const items = [];
+        fields.forEach(el => {
+            if (el.getClientRects().length === 0) return; // ข้ามช่องที่ซ่อนอยู่
+            const cs = window.getComputedStyle(el);
+            const isTextarea = el.tagName === 'TEXTAREA';
+            let text;
+            if (el.tagName === 'SELECT') {
+                const opt = el.options[el.selectedIndex];
+                text = opt ? opt.textContent : '';
+            } else {
+                text = el.value || '';
+            }
+
             const div = document.createElement('div');
-            div.className = ta.className;
-            
-            // คัดลอกสไตล์ทั้งหมดมา
-            const style = window.getComputedStyle(ta);
-            div.style.fontFamily = style.fontFamily;
-            div.style.fontSize = style.fontSize;
-            div.style.color = style.color;
-            div.style.width = style.width;
-            div.style.height = style.height;
-            div.style.padding = style.padding;
-            
-            // บังคับการขึ้นบรรทัดใหม่ให้เหมือนการพิมพ์จริง
-            div.style.whiteSpace = 'pre-wrap';
-            div.style.wordBreak = 'break-word';
-            div.style.overflow = 'hidden';
-            
-            // ใส่ข้อความลงไป (\n จะถูกปัดบรรทัดอัตโนมัติด้วย pre-wrap)
-            // แทรกช่องว่างที่มองไม่เห็น (zero-width space) ตรงรอยต่อไทย-อังกฤษ/ตัวเลข
-            // เพื่อให้ html2canvas มีจุดตัดขึ้นบรรทัดใหม่ได้ (ไม่งั้นคำที่ติดกันจะไม่ขึ้นบรรทัดใหม่)
-            div.textContent = addSoftBreaks(ta.value);
-            
-            ta.parentNode.insertBefore(div, ta);
-            ta.style.display = 'none';
-            replacements.push({ textarea: ta, div: div });
+            const set = (k, v) => div.style.setProperty(k, v, 'important');
+            set('box-sizing', 'border-box');
+            set('display', 'block');
+            set('flex', '0 0 auto');
+            set('width', cs.width);
+            set('min-height', cs.height);
+            set('height', 'auto');
+            set('margin', '0');
+            set('padding', isTextarea
+                ? cs.padding
+                : '2px ' + cs.paddingRight + ' 2px ' + cs.paddingLeft);
+            set('font-family', cs.fontFamily);
+            set('font-size', cs.fontSize);
+            set('font-weight', cs.fontWeight);
+            set('color', cs.color);
+            set('text-align', (cs.textAlign === 'start' || cs.textAlign === '-webkit-auto') ? 'left' : cs.textAlign);
+            set('line-height', '1.7');
+            const isSelect = el.tagName === 'SELECT';
+            // dropdown (วัน/เดือน/ปี/เวลา/%) เป็นข้อความสั้น ห้ามตัดบรรทัด; ช่องข้อความให้ขึ้นบรรทัดใหม่ได้
+            set('white-space', isTextarea ? 'pre-wrap' : (isSelect ? 'nowrap' : 'normal'));
+            set('word-break', 'normal');
+            set('overflow-wrap', isSelect ? 'normal' : 'anywhere');
+            set('overflow', 'visible');
+            set('background', 'transparent');
+            set('border', 'none');
+            div.textContent = isSelect ? text : addSoftBreaks(text);
+
+            el.parentNode.insertBefore(div, el);
+            const prevDisplay = el.style.getPropertyValue('display');
+            const prevPriority = el.style.getPropertyPriority('display');
+            el.style.setProperty('display', 'none', 'important');
+            items.push({ el, div, prevDisplay, prevPriority });
         });
-        return replacements;
+        return function restore() {
+            items.forEach(it => {
+                it.div.remove();
+                if (it.prevDisplay) it.el.style.setProperty('display', it.prevDisplay, it.prevPriority);
+                else it.el.style.removeProperty('display');
+            });
+        };
     }
 
-    function restoreTextareas(replacements) {
-        replacements.forEach(rep => {
-            rep.textarea.style.display = '';
-            rep.div.remove();
-        });
+    function withTimeout(promise, ms) {
+        return Promise.race([
+            promise,
+            new Promise((_, reject) => setTimeout(() => reject(new Error('หมดเวลาในการบันทึก (เกิน ' + (ms / 1000) + ' วินาที)')), ms))
+        ]);
     }
 
-    // ฟังก์ชัน: บันทึกเป็นรูปภาพความละเอียดสูง (โหลดลงเครื่อง)
-    function saveAsImage() {
-        const btn = document.getElementById('btn-save-img');
-        const originalText = btn.innerHTML;
-        btn.innerHTML = '⏳ กำลังบันทึก...';
-        btn.disabled = true;
+    let captureInProgress = false;
 
+    // แคปฟอร์มเป็นรูป (PNG data URL) — จุดเดียวที่ทุกปุ่มเรียกใช้
+    async function captureFormImage() {
         const formElement = document.getElementById('form-content');
-        
-        // ซ่อนเงาและเส้นประของปุ่มอัปโหลดเพื่อให้ภาพออกมาดูเป็นทางการ
         const originalBoxShadow = formElement.style.boxShadow;
-        formElement.style.boxShadow = 'none';
-        
-        // ปรับระยะห่างให้พอดีกับขนาด A4 แนวนอนเหมือนตอนพิมพ์
-        formElement.classList.add('capture-mode');
-        
-        // บังคับซ่อนคำว่า "+ อัปโหลดรูปภาพ" ก่อนแคปเจอร์
         const placeholders = document.querySelectorAll('.image-placeholder-text');
+        const scrollPos = { x: window.scrollX, y: window.scrollY };
+
+        formElement.style.boxShadow = 'none';
+        formElement.classList.add('capture-mode');
         placeholders.forEach(el => el.style.display = 'none');
-        
-        // รีเซ็ตการเลื่อนหน้าจอเพื่อป้องกันภาพขาด
         window.scrollTo(0, 0);
+        const restoreFields = replaceFieldsWithStatic(formElement);
 
-        // แปลง Textarea และ Select เป็น Div ชั่วคราว เพื่อให้ข้อความขึ้นบรรทัดใหม่ครบถ้วน
-        // และไม่มีลูกศร dropdown ติดไปในรูปที่บันทึก
-        const taReplacements = replaceTextareasWithDivs(formElement);
-        const selReplacements = replaceSelectsWithDivs(formElement);
-        const timeReplacements = replaceTimeInputsWithDivs(formElement);
+        try {
+            try { await document.fonts.ready; } catch (e) { /* ไม่เป็นไร */ }
+            const canvas = await withTimeout(html2canvas(formElement, {
+                scale: 3,
+                useCORS: true,
+                backgroundColor: '#ffffff',
+                // จัดหน้าแบบจอคอมเสมอ ไม่ว่าจะกดจากมือถือหรือคอม → รูปออกมาหน้าตาเดียวกัน
+                windowWidth: Math.max(1400, document.documentElement.clientWidth),
+                scrollX: 0,
+                scrollY: 0
+            }), 25000);
+            return canvas.toDataURL('image/png');
+        } finally {
+            restoreFields();
+            formElement.classList.remove('capture-mode');
+            formElement.style.boxShadow = originalBoxShadow;
+            placeholders.forEach(el => el.style.display = '');
+            window.scrollTo(scrollPos.x, scrollPos.y);
+        }
+    }
 
-        let captureDone = false;
+    function setButtonBusy(btn, busyText) {
+        const original = btn.innerHTML;
+        btn.innerHTML = busyText;
+        btn.disabled = true;
+        return () => { btn.innerHTML = original; btn.disabled = false; };
+    }
 
-        function finishCapture(canvas) {
-            if (captureDone) return;
-            captureDone = true;
-            restoreTextareas(taReplacements);
-            restoreSelects(selReplacements);
-            restoreTimeInputs(timeReplacements);
-
+    // ปุ่ม "โหลดเป็นรูป": ดาวน์โหลดรูป + อัปขึ้น Google Drive (ชื่อไฟล์เดียวกัน)
+    async function saveAsImage() {
+        if (captureInProgress) return;
+        captureInProgress = true;
+        const done = setButtonBusy(document.getElementById('btn-save-img'), '⏳ กำลังบันทึก...');
+        try {
+            const pngData = await captureFormImage();
             const link = document.createElement('a');
-            const dateStr = new Date().toISOString().slice(0,10); // ตั้งชื่อไฟล์ตามวันที่ปัจจุบัน
-            link.download = 'รายงานปัญหา_' + dateStr + '.png';
-            const pngData = canvas.toDataURL('image/png');
+            link.download = buildDriveFilename();
             link.href = pngData;
+            document.body.appendChild(link);
             link.click();
+            link.remove();
+            uploadToDrive(pngData);
+        } catch (err) {
+            console.error(err);
+            alert('เกิดข้อผิดพลาดในการบันทึกรูปภาพ\n' + (err && err.message ? err.message : ''));
+        } finally {
+            done();
+            captureInProgress = false;
+        }
+    }
 
-            // อัปโหลดรูปเดียวกันขึ้น Google Drive ด้วย
+    // ปุ่ม "PDF/พิมพ์": ใช้รูปเดียวกับปุ่มโหลดรูป → อัปขึ้น Drive แล้วเปิดหน้าบันทึก PDF/พิมพ์ด้วยรูปนั้น
+    let printingFromImage = false;
+    async function saveAsPdf() {
+        if (captureInProgress) return;
+        captureInProgress = true;
+        const done = setButtonBusy(document.getElementById('btn-pdf'), '⏳ กำลังเตรียม...');
+        try {
+            const pngData = await captureFormImage();
             uploadToDrive(pngData);
 
-            // คืนค่ารูปแบบเดิม
-            formElement.style.boxShadow = originalBoxShadow;
-            formElement.classList.remove('capture-mode');
-            placeholders.forEach(el => el.style.display = '');
-            btn.innerHTML = originalText;
-            btn.disabled = false;
-        }
-
-        function failCapture(err) {
-            if (captureDone) return;
-            captureDone = true;
-            restoreTextareas(taReplacements);
-            restoreSelects(selReplacements);
-            restoreTimeInputs(timeReplacements);
+            const img = document.getElementById('print-image');
+            img.src = pngData;
+            try { await img.decode(); } catch (e) { /* บางเบราว์เซอร์ไม่รองรับ decode */ }
+            document.body.classList.add('print-from-image');
+            printingFromImage = true;
+            done();
+            captureInProgress = false;
+            window.print();
+        } catch (err) {
             console.error(err);
-            alert('เกิดข้อผิดพลาดในการบันทึกรูปภาพ');
-            formElement.style.boxShadow = originalBoxShadow;
-            formElement.classList.remove('capture-mode');
-            placeholders.forEach(el => el.style.display = '');
-            btn.innerHTML = originalText;
-            btn.disabled = false;
+            alert('เกิดข้อผิดพลาดในการเตรียม PDF\n' + (err && err.message ? err.message : ''));
+            done();
+            captureInProgress = false;
         }
-
-        // รอให้ฟอนต์ Sarabun โหลดเสร็จสมบูรณ์ก่อนแคป เพื่อไม่ให้สระ/วรรณยุกต์ขาด
-        // (ตัดโหมด foreignObjectRendering ออก เพราะทำให้ค้างเมื่อฟอร์มมีรูปภาพ/องค์ประกอบเยอะ
-        //  ใช้การเพิ่ม line-height/padding/ลดขนาดตัวอักษรแทนเพื่อแก้ปัญหาตัวอักษรขาด)
-        document.fonts.ready.then(() => {
-            html2canvas(formElement, {
-                scale: 3,
-                useCORS: true,
-                backgroundColor: "#ffffff"
-            }).then(finishCapture).catch(failCapture);
-        }).catch(() => {
-            html2canvas(formElement, {
-                scale: 3,
-                useCORS: true,
-                backgroundColor: "#ffffff"
-            }).then(finishCapture).catch(failCapture);
-        });
-
-        // กันปุ่มค้างถาวร: ถ้าเกิน 25 วินาทีแล้วยังไม่เสร็จ ให้ถือว่าล้มเหลวและคืนปุ่มกลับมาใช้งานได้
-        setTimeout(() => {
-            if (!captureDone) {
-                failCapture(new Error('หมดเวลาในการบันทึกรูปภาพ (เกิน 25 วินาที)'));
-            }
-        }, 25000);
     }
 
     // สคริปต์ 1: แสดงรูปภาพเมื่ออัปโหลด
@@ -1048,34 +1005,17 @@
         }
     }
 
-    // ก่อนพิมพ์/บันทึก PDF: สลับ select, textarea, ช่องเวลา เป็นข้อความล้วนเหมือนตอนโหลดเป็นรูป
-    // เพื่อไม่ให้ลูกศร dropdown / ไอคอนนาฬิกา ติดไปในกระดาษ/PDF
-    // และแคปรูปเดียวกันอัปโหลดขึ้น Google Drive คู่กันไปด้วย (ไม่บล็อกการพิมพ์)
-    let printReplacements = null;
+    // กรณีสั่งพิมพ์เอง (Ctrl+P / เมนูเบราว์เซอร์) ไม่ผ่านปุ่ม PDF: พิมพ์หน้าฟอร์มปกติ โดยซ่อนลูกศร dropdown
+    // (ปุ่ม "PDF/พิมพ์" จะพิมพ์จากรูปที่แคปไว้ ซึ่งเหมือนรูปที่ขึ้น Drive ทุกประการ)
+    let restoreNativePrint = null;
     window.addEventListener('beforeprint', function () {
-        const formElement = document.getElementById('form-content');
-        formElement.classList.add('capture-mode');
-        printReplacements = {
-            ta: replaceTextareasWithDivs(formElement),
-            sel: replaceSelectsWithDivs(formElement),
-            time: replaceTimeInputsWithDivs(formElement)
-        };
-
-        document.fonts.ready.then(() => {
-            html2canvas(formElement, { scale: 3, useCORS: true, backgroundColor: "#ffffff" })
-                .then(canvas => uploadToDrive(canvas.toDataURL('image/png')))
-                .catch(err => console.error('แคปรูปสำหรับอัป Drive ไม่สำเร็จ:', err));
-        }).catch(() => {});
+        if (printingFromImage) return;
+        document.body.classList.remove('print-from-image');
+        restoreNativePrint = replaceFieldsWithStatic(document.getElementById('form-content'));
     });
     window.addEventListener('afterprint', function () {
-        const formElement = document.getElementById('form-content');
-        formElement.classList.remove('capture-mode');
-        if (printReplacements) {
-            restoreTextareas(printReplacements.ta);
-            restoreSelects(printReplacements.sel);
-            restoreTimeInputs(printReplacements.time);
-            printReplacements = null;
-        }
+        printingFromImage = false;
+        if (restoreNativePrint) { restoreNativePrint(); restoreNativePrint = null; }
     });
 
     window.onload = function() {
@@ -1092,5 +1032,7 @@
         updatePieChart('input-overall', 'chart-overall');
     };
 </script>
+<!-- รูปที่ใช้ตอนกดปุ่ม PDF/พิมพ์ (แสดงเฉพาะตอนพิมพ์) -->
+<div id="print-image-wrap"><img id="print-image" alt=""></div>
 </body>
 </html>
